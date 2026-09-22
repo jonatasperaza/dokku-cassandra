@@ -12,7 +12,7 @@ Not an official `dokku` org plugin — see [docs/README.md](docs/README.md) and 
 ## Installation
 
 ```shell
-sudo dokku plugin:install https://github.com/<your-user>/dokku-cassandra.git --name cassandra
+sudo dokku plugin:install https://github.com/jonatasperaza/dokku-cassandra.git --name cassandra
 ```
 
 ## Commands
