@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# same as pre-start: an app being restored from backup needs its linked
+# cassandra services up before it boots
+trigger-pre-restore() {
+  declare APP="$1"
+  local SERVICE
+
+  [[ -z "$APP" ]] && return 0
+
+  for SERVICE in $(service_app_links "$APP" 2>/dev/null || true); do
+    [[ -n "$SERVICE" ]] || continue
+    service_start "$SERVICE" "true" || dokku_log_warn "Unable to start $PLUGIN_SERVICE service $SERVICE for $APP"
+  done
+}
+
+trigger-pre-restore "$@"

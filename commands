@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+# dokku calls every plugin's commands script for any command it cannot
+# dispatch straight to a subcommands/ file (see subcommands/*), so this bows
+# out immediately for everything except the two forms of help it does own
+[[ " help $PLUGIN_COMMAND_PREFIX $PLUGIN_COMMAND_PREFIX:default $PLUGIN_COMMAND_PREFIX:help " == *" $1 "* ]] || exit "$DOKKU_NOT_IMPLEMENTED_EXIT"
+
 set -eo pipefail
 [[ $DOKKU_TRACE ]] && set -x
 
-SUBCOMMANDS_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/subcommands"
-
-case "$1" in
-  cassandra:admin-console | cassandra:app-links | cassandra:clone | cassandra:connect | \
-    cassandra:create | cassandra:destroy | cassandra:enter | cassandra:exists | \
-    cassandra:export | cassandra:expose | cassandra:import | cassandra:info | \
-    cassandra:link | cassandra:linked | cassandra:links | cassandra:list | \
-    cassandra:logs | cassandra:pause | cassandra:promote | cassandra:restart | \
-    cassandra:set | cassandra:start | cassandra:stop | cassandra:unexpose | \
-    cassandra:unlink | cassandra:upgrade)
-    SUBCOMMAND="${1#cassandra:}"
-    exec "$SUBCOMMANDS_PATH/$SUBCOMMAND" "$@"
-    ;;
-
-  help | cassandra:help)
-    cat <<help_desc
+cassandra-commands() {
+  cat <<help_desc
     cassandra:admin-console <service>, open a cqlsh shell against the service (alias of connect)
     cassandra:app-links <app>, list all cassandra service links for a given app
     cassandra:clone <service> <new-service> [--clone-flags...], create container <new-name> then copy data from <name> into <new-name>
@@ -46,9 +37,6 @@ case "$1" in
     cassandra:unlink <service> <app>, unlink the cassandra service from the app
     cassandra:upgrade <service> [--upgrade-flags...], upgrade service <service> to the specified image/version
 help_desc
-    ;;
+}
 
-  *)
-    exit "$DOKKU_NOT_IMPLEMENTED_EXIT"
-    ;;
-esac
+cassandra-commands "$@"

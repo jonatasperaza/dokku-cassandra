@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# drops $APP from every cassandra service's LINKS file before it is deleted,
+# so no service is left pointing at an app that no longer exists. Only our own
+# bookkeeping is touched here (not config_unset/docker-options), since the
+# app's own config store may already be gone by the time this runs
+trigger-pre-delete() {
+  declare APP="$1"
+  local SERVICE
+
+  [[ -z "$APP" ]] && return 0
+
+  for SERVICE in $(service_app_links "$APP" 2>/dev/null || true); do
+    [[ -n "$SERVICE" ]] || continue
+    dokku_log_info1 "Unlinking $PLUGIN_SERVICE service $SERVICE from $APP"
+    remove_from_links_file "$SERVICE" "$APP"
+  done
+}
+
+trigger-pre-delete "$@"

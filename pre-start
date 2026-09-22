@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# starts every cassandra service linked to $APP before it boots, so a service
+# that was left stopped does not take the app down with it
+trigger-pre-start() {
+  declare APP="$1"
+  local SERVICE
+
+  [[ -z "$APP" ]] && return 0
+
+  for SERVICE in $(service_app_links "$APP" 2>/dev/null || true); do
+    [[ -n "$SERVICE" ]] || continue
+    service_start "$SERVICE" "true" || dokku_log_warn "Unable to start $PLUGIN_SERVICE service $SERVICE for $APP"
+  done
+}
+
+trigger-pre-start "$@"

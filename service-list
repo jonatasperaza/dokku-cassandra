@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# lists the services this plugin manages, for anything that aggregates
+# services across every installed datastore plugin
+trigger-service-list() {
+  local SERVICE
+  for SERVICE in $(fn-services-list true); do
+    [[ -n "$SERVICE" ]] || continue
+    echo "$SERVICE: $PLUGIN_COMMAND_PREFIX"
+  done
+}
+
+trigger-service-list "$@"

@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# carries every cassandra service link from the app being cloned onto its
+# clone, using the same default alias service_link would pick on its own; a
+# clone that already had more than one cassandra service linked under a
+# custom alias should double check the result with cassandra:links
+trigger-post-app-clone-setup() {
+  declare OLD_APP="$1" NEW_APP="$2"
+  local SERVICE
+
+  [[ -z "$OLD_APP" ]] || [[ -z "$NEW_APP" ]] && return 0
+
+  for SERVICE in $(service_app_links "$OLD_APP" 2>/dev/null || true); do
+    [[ -n "$SERVICE" ]] || continue
+    dokku_log_info1 "Linking $PLUGIN_SERVICE service $SERVICE to $NEW_APP"
+    service_link "$SERVICE" "$NEW_APP" || dokku_log_warn "Unable to link $SERVICE to $NEW_APP automatically; run 'dokku $PLUGIN_COMMAND_PREFIX:link $SERVICE $NEW_APP' by hand"
+  done
+}
+
+trigger-post-app-clone-setup "$@"

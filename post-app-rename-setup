@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+# carries every cassandra service link across an app rename. dokku itself
+# keeps the app's own config store (and therefore its CASSANDRA_URL) across a
+# rename, so only our LINKS bookkeeping needs to move
+trigger-post-app-rename-setup() {
+  declare OLD_APP="$1" NEW_APP="$2"
+  local SERVICE
+
+  [[ -z "$OLD_APP" ]] || [[ -z "$NEW_APP" ]] && return 0
+
+  for SERVICE in $(service_app_links "$OLD_APP" 2>/dev/null || true); do
+    [[ -n "$SERVICE" ]] || continue
+    dokku_log_info1 "Carrying $PLUGIN_SERVICE service $SERVICE link from $OLD_APP to $NEW_APP"
+    remove_from_links_file "$SERVICE" "$OLD_APP"
+    add_to_links_file "$SERVICE" "$NEW_APP"
+  done
+}
+
+trigger-post-app-rename-setup "$@"

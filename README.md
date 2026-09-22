@@ -1,117 +1,163 @@
-# dokku-cassandra
+# dokku cassandra
 
-Plugin de serviço Cassandra para [Dokku](https://dokku.com), no mesmo estilo dos plugins de datastore oficiais (postgres, mysql, redis): cada serviço roda como um container dedicado, com dados persistidos em volume, e pode ser linkado a apps via variável de ambiente `CASSANDRA_URL`.
+Cassandra plugin for dokku. Currently defaults to installing [cassandra 5.0.9](https://hub.docker.com/_/cassandra/).
 
-## Requisitos
+Not an official `dokku` org plugin — see [docs/README.md](docs/README.md) and the "About this plugin" section below for how it differs from redis/mongo/postgres/mysql, which are.
 
-- Dokku 0.19+
-- Docker
+## Requirements
 
-## Instalação
+- dokku 0.19.x+
+- docker 1.8.x
 
-```bash
-# no servidor Dokku
-sudo dokku plugin:install https://github.com/<seu-usuario>/dokku-cassandra.git --name cassandra
+## Installation
+
+```shell
+sudo dokku plugin:install https://github.com/<your-user>/dokku-cassandra.git --name cassandra
 ```
 
-Ou, sem publicar num repositório git, copiando os arquivos direto para o servidor:
-
-```bash
-scp -r dokku-cassandra root@servidor:/var/lib/dokku/plugins/available/cassandra
-ssh root@servidor "dokku plugin:enable cassandra"
-```
-
-## Uso básico
-
-```bash
-# criar um serviço chamado "db1"
-dokku cassandra:create db1
-
-# ver informações de conexão
-dokku cassandra:info db1
-
-# linkar ao app (seta CASSANDRA_URL no app)
-dokku cassandra:link db1 meuapp
-
-# entrar no cqlsh
-dokku cassandra:connect db1
-
-# parar / iniciar
-dokku cassandra:stop db1
-dokku cassandra:start db1
-
-# destruir (pede confirmação, a não ser que use -f)
-dokku cassandra:destroy db1
-```
-
-## Comandos disponíveis
+## Commands
 
 ```
-cassandra:admin-console <service>                    # abre um cqlsh contra o serviço (alias de connect)
-cassandra:app-links <app>                             # lista os serviços cassandra linkados a um app
-cassandra:clone <service> <new-service>                # cria <new-service> e copia os dados de <service>
-cassandra:connect <service>                            # conecta via cqlsh
-cassandra:create <service> [--create-flags...]         # cria um serviço
-cassandra:destroy <service> [-f|--force]                # apaga serviço/dados/container
-cassandra:enter <service> [cmd...]                      # abre um shell (ou roda um comando) no container
-cassandra:exists <service>                              # verifica se o serviço existe
-cassandra:export <service>                              # exporta um snapshot do diretório de dados (stdout)
-cassandra:expose <service> <ports...>                   # expõe o serviço na interface pública
-cassandra:import <service>                              # importa um snapshot para o diretório de dados (stdin)
-cassandra:info <service> [--flag]                       # informações do serviço
-cassandra:link <service> <app>                          # linka o serviço ao app
-cassandra:linked <service> <app>                        # verifica se está linkado
-cassandra:links <service>                                # lista apps linkados ao serviço
-cassandra:list                                           # lista todos os serviços
-cassandra:logs <service> [-t|--tail] [n]                 # logs do container
-cassandra:pause <service>                                # pausa o container (mantém o container)
-cassandra:promote <service> <app>                        # promove o serviço como CASSANDRA_URL principal
-cassandra:restart <service>                              # reinicia o container
-cassandra:set <service> <key> <value>                    # seta propriedades (initial-network, post-create-network, post-start-network)
-cassandra:start <service>                                # inicia um serviço parado
-cassandra:stop <service>                                 # para e remove o container (dados ficam no volume)
-cassandra:unexpose <service>                             # remove exposição pública
-cassandra:unlink <service> <app>                         # desfaz o link com o app
-cassandra:upgrade <service> [--upgrade-flags...]         # troca a imagem/versão do serviço
+cassandra:admin-console <service>                    # open a cqlsh shell against the service (alias of connect)
+cassandra:app-links <app>                             # list all cassandra service links for a given app
+cassandra:clone <service> <new-service> [--clone-flags...] # create container <new-service> then copy data from <service> into <new-service>
+cassandra:connect <service>                            # connect to the service via cqlsh
+cassandra:create <service> [--create-flags...]         # create a cassandra service
+cassandra:destroy <service> [-f|--force]                # delete the cassandra service/data/container if there are no links left
+cassandra:enter <service> [cmd...]                      # enter or run a command in a running cassandra service container
+cassandra:exists <service>                              # check if the cassandra service exists
+cassandra:export <service>                              # export a snapshot of the cassandra service data directory
+cassandra:expose <service> <ports...>                   # expose a cassandra service on custom host:port
+cassandra:import <service>                              # import a snapshot into the cassandra service data directory
+cassandra:info <service> [--flag]                       # print the service information
+cassandra:link <service> <app> [--link-flags...]        # link the cassandra service to the app
+cassandra:linked <service> <app>                        # check if the cassandra service is linked to an app
+cassandra:links <service>                                # list all apps linked to the cassandra service
+cassandra:list                                           # list all cassandra services
+cassandra:logs <service> [-t|--tail] [n]                 # print the most recent log(s) for this service
+cassandra:pause <service>                                # pause a running cassandra service
+cassandra:promote <service> <app>                        # promote service <service> as CASSANDRA_URL in <app>
+cassandra:restart <service>                              # graceful shutdown and restart of the cassandra service container
+cassandra:set <service> <key> <value>                    # set or clear a property for a service
+cassandra:start <service>                                # start a previously stopped cassandra service
+cassandra:stop <service>                                 # stop a running cassandra service and remove the container
+cassandra:unexpose <service>                             # unexpose a previously exposed cassandra service
+cassandra:unlink <service> <app>                         # unlink the cassandra service from the app
+cassandra:upgrade <service> [--upgrade-flags...]         # upgrade service <service> to the specified image/version
 ```
 
-## Flags de `create` / `upgrade` / `clone`
+## Usage
 
-- `-i|--image IMAGE`: imagem docker a usar (padrão: `cassandra`)
-- `-I|--image-version VERSION`: versão/tag da imagem (padrão: `5.0`)
-- `-m|--memory MEMORY`: limite de memória do container, em MB
-- `-c|--config-options "..."`: flags JVM extras (repassadas via `JVM_EXTRA_OPTS`)
-- `-C|--custom-env "A=1;B=2"`: variáveis de ambiente extras, separadas por `;`
-- `-d|--cluster-name NAME`: nome do cluster Cassandra (padrão: nome do serviço, sanitizado)
-- `-N|--initial-network NETWORK`: rede docker inicial
-- `-P|--post-create-network NETWORKS`: redes a conectar após criar o container
-- `-S|--post-start-network NETWORKS`: redes a conectar após iniciar o container
+Help for any command can be displayed by passing it to `cassandra:help`, e.g. `dokku cassandra:help create`.
 
-Exemplo:
+### create a cassandra service
 
-```bash
-dokku cassandra:create db1 --memory 1024 --image-version 5.0
+```shell
+# usage
+dokku cassandra:create <service> [--create-flags...]
 ```
 
-## Como funciona / limitações
+flags:
 
-- Usa a imagem oficial `cassandra` do Docker Hub diretamente (não builda imagem própria).
-- Single-node por serviço: cada `cassandra:create` sobe um nó Cassandra isolado, próprio para desenvolvimento, staging ou cargas pequenas — não forma um cluster multi-nó automaticamente.
-- **Sem autenticação por padrão**: a imagem oficial do Cassandra não autentica por padrão, e este plugin não configura `PasswordAuthenticator`. O isolamento é feito pela rede Docker (o serviço só é alcançável pelos containers linkados, a não ser que você use `cassandra:expose`). Se precisar de autenticação, configure manualmente dentro do container ou contribua um PR :)
-- A URL de conexão gerada é do tipo `cassandra://dokku-cassandra-<service>:9042/<keyspace>` — o "keyspace" no final é só um valor sanitizado do nome do serviço; crie o keyspace de fato via `cassandra:connect` antes de usá-lo.
-- `cassandra:export` / `cassandra:import` fazem um `nodetool flush` seguido de tar do diretório de dados — funcional para single-node, mas não é um backup consistente para clusters multi-nó.
-- A inicialização de um container novo pode levar 1-3 minutos (JVM + bootstrap do Cassandra); `cassandra:create` e `cassandra:start` aguardam até `PLUGIN_STARTUP_TIMEOUT` (padrão 180 tentativas de 2s = ~6 min) o `cqlsh` responder antes de desistir.
-- Triggers de app (`pre-delete`, `post-app-clone-setup`, `post-app-rename-setup`) não foram implementados nesta primeira versão — destruir/renomear apps não desfaz links automaticamente, então rode `cassandra:unlink` antes de apagar um app com serviço linkado.
+- `-i|--image <string>`: the image name to start the service with (default: `cassandra`)
+- `-I|--image-version <string>`: the image version to start the service with (default: `5.0.9`)
+- `-m|--memory <int>`: container memory limit in megabytes (default: unlimited)
+- `-c|--config-options <string>`: extra JVM flags, passed through as `JVM_EXTRA_OPTS`
+- `-C|--custom-env <string>`: semi-colon delimited environment variables to start the service with
+- `-d|--cluster-name <string>`: the Cassandra cluster name (default: the service name)
+- `-N|--initial-network <string>`: the initial network to attach the service to
+- `-P|--post-create-network <strings>`: a comma-separated list of networks to attach the service container to after service creation
+- `-S|--post-start-network <strings>`: a comma-separated list of networks to attach the service container to after service start
 
-## Estrutura do plugin
+Create a cassandra service named lollipop:
 
-Segue o padrão clássico de plugins de datastore do Dokku (usado por postgres/mysql/mongo antes das reescritas em Go):
-
+```shell
+dokku cassandra:create lollipop
 ```
-plugin.toml        # metadados do plugin
-config              # variáveis de configuração (portas, imagem padrão, paths)
-commands            # dispatcher de "dokku cassandra:<subcomando>"
-functions           # lógica específica do Cassandra (create/start/export/url/...)
-common-functions    # lógica genérica de serviço (link/unlink/info/list/...)
-subcommands/        # um arquivo executável por subcomando
+
+A fresh container can take one to three minutes to become reachable (JVM start plus bootstrap); the command waits for `cqlsh` to answer before returning.
+
+### print the service information
+
+```shell
+# usage
+dokku cassandra:info <service> [--single-info-flag]
 ```
+
+flags: `--config-options`, `--data-dir`, `--dsn`, `--exposed-ports`, `--id`, `--internal-ip`, `--initial-network`, `--links`, `--post-create-network`, `--post-start-network`, `--service-root`, `--status`, `--version`
+
+```shell
+dokku cassandra:info lollipop
+dokku cassandra:info lollipop --dsn
+```
+
+### link the service to an app
+
+```shell
+# usage
+dokku cassandra:link <service> <app> [--link-flags...]
+```
+
+flags:
+
+- `-a|--alias <string>`: an alternative alias to use for linking to an app via environment variable
+- `-q|--querystring <string>`: ampersand delimited querystring arguments to append to the service link
+- `-n|--no-restart`: do not restart the app on link (default: restarts)
+
+```shell
+dokku cassandra:link lollipop playground
+```
+
+This sets `CASSANDRA_URL` on the app to `cassandra://dokku-cassandra-lollipop:9042/lollipop` — see [docs/README.md](docs/README.md) for why there are no credentials in it and why the keyspace at the end is not created for you.
+
+### expose a service on a host port
+
+```shell
+# usage
+dokku cassandra:expose <service> <ports...>
+```
+
+```shell
+dokku cassandra:expose lollipop 9042
+dokku cassandra:expose lollipop 127.0.0.1:9042
+```
+
+### export / import
+
+```shell
+dokku cassandra:export lollipop > backup.tar
+dokku cassandra:import lollipop < backup.tar
+```
+
+`export` flushes memtables to disk and streams the whole data directory as a tar; `import` stops the container, replaces the data directory, and starts it back up. Both move the raw sstables, not a per-keyspace logical dump — see [docs/README.md](docs/README.md).
+
+### clone a service
+
+```shell
+dokku cassandra:clone lollipop lollipop-2
+```
+
+Creates `lollipop-2` and copies `lollipop`'s data into it (implemented as an export piped into an import).
+
+### upgrade a service
+
+```shell
+# usage
+dokku cassandra:upgrade <service> [--upgrade-flags...]
+```
+
+Takes the same `-i|--image`, `-I|--image-version`, `-m|--memory`, `-c|--config-options`, `-C|--custom-env` flags as `create`. Recreates the container against the new image/settings; data is untouched since it lives on the bind-mounted volume.
+
+```shell
+dokku cassandra:upgrade lollipop --image-version 5.0.9
+```
+
+## About this plugin
+
+Dokku's own datastore plugins (redis, mongo, postgres, mysql, mariadb, elasticsearch, and a few more) are thin wrappers around a shared, closed-source binary called [`dokku-datastore`](https://github.com/dokku/dokku-datastore) that ships every one of those engines' definitions built in. That binary was checked directly (`dokku-datastore generate cassandra`) while building this plugin, and it rejects any type name it does not already know — Cassandra isn't one of the ~20 it embeds, and there is no supported way for a third-party plugin to register a new one.
+
+So this plugin implements its service lifecycle itself, in bash, the way every community datastore plugin does (and the way `dokku-redis`/`dokku-postgres`/etc. themselves did before their move to `dokku-datastore`). The file layout mirrors the current `dokku-mongo`/`dokku-redis` repos as closely as that constraint allows: `plugin.toml`, `config`, `commands`, one file per subcommand under `subcommands/`, the same root-level app-lifecycle triggers (`pre-start`, `pre-restore`, `pre-delete`, `post-app-clone-setup`, `post-app-rename-setup`, `service-list`), and a `docs/README.md` for supplemental notes. What differs is `functions`/`common-functions`, which hold this plugin's own implementation instead of a call into `dokku-datastore`, and the lack of an `install` script, since there is no external binary for this plugin to fetch.
+
+## Known limitations (v0.1)
+
+See [docs/README.md](docs/README.md) for the full notes. In short: no authentication, no auto-created keyspace, single node per service, and `export`/`import` move raw sstables rather than a logical per-keyspace dump. S3 backup commands (`backup`, `backup-auth`, `backup-schedule`, ...), which the official plugins offer, are not implemented in this version.
