@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-upgrade-cmd() {
+  declare desc="upgrade service <service> to the specified image/version"
+  local cmd="$PLUGIN_COMMAND_PREFIX:upgrade" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1"
+
+  verify_service_name "$SERVICE"
+  service_parse_args "${@:2}"
+  service_commit_config "$SERVICE"
+  service_container_rm "$SERVICE"
+  service_create_container "$SERVICE"
+  dokku_log_info2 "$PLUGIN_SERVICE service $SERVICE upgraded"
+}
+
+service-upgrade-cmd "$@"

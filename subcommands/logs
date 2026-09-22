@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-logs-cmd() {
+  declare desc="print the most recent log(s) for this service"
+  local cmd="$PLUGIN_COMMAND_PREFIX:logs" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" TAIL_FLAG="$2" TAIL_COUNT="${3:-100}"
+
+  verify_service_name "$SERVICE"
+  service_logs "$SERVICE" "$TAIL_FLAG" "$TAIL_COUNT"
+}
+
+service-logs-cmd "$@"

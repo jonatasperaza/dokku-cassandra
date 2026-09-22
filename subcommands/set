@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-set-cmd() {
+  declare desc="set or clear a property for a service"
+  local cmd="$PLUGIN_COMMAND_PREFIX:set" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" KEY="$2" VALUE="$3"
+
+  verify_service_name "$SERVICE"
+  [[ -z "$KEY" ]] && dokku_log_fail "Please specify a valid key"
+
+  case "$KEY" in
+    initial-network | post-create-network | post-start-network)
+      fn-plugin-property-write "$PLUGIN_COMMAND_PREFIX" "$SERVICE" "$KEY" "$VALUE"
+      ;;
+    *)
+      dokku_log_fail "Property ($KEY) not supported"
+      ;;
+  esac
+  dokku_log_info2 "$PLUGIN_SERVICE service $SERVICE property $KEY set"
+}
+
+service-set-cmd "$@"

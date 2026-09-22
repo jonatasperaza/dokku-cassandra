@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-linked-cmd() {
+  declare desc="check if the $PLUGIN_SERVICE service is linked to an app"
+  local cmd="$PLUGIN_COMMAND_PREFIX:linked" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" APP="$2"
+
+  verify_service_name "$SERVICE"
+  [[ -z "$APP" ]] && dokku_log_fail "Please specify an app to run the command on"
+  verify_app_name "$APP"
+  service_is_linked "$SERVICE" "$APP"
+}
+
+service-linked-cmd "$@"

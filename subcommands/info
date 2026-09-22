@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-info-cmd() {
+  declare desc="print the service information"
+  local cmd="$PLUGIN_COMMAND_PREFIX:info" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" INFO_FLAG="$2"
+
+  verify_service_name "$SERVICE"
+  service_info "$SERVICE" "$INFO_FLAG"
+}
+
+service-info-cmd "$@"

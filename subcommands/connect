@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-connect-cmd() {
+  declare desc="connect to the service via cqlsh"
+  local cmd="$PLUGIN_COMMAND_PREFIX:connect" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1"
+
+  verify_service_name "$SERVICE"
+  service_connect "$SERVICE"
+}
+
+service-connect-cmd "$@"

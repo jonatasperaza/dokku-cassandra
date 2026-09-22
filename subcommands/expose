@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-expose-cmd() {
+  declare desc="expose a $PLUGIN_SERVICE service on custom host:port"
+  local cmd="$PLUGIN_COMMAND_PREFIX:expose" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" && shift 1 || true
+
+  verify_service_name "$SERVICE"
+  service_port_expose "$SERVICE" "$@"
+}
+
+service-expose-cmd "$@"

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-clone-cmd() {
+  declare desc="create container <new-service> then copy data from <service> into <new-service>"
+  local cmd="$PLUGIN_COMMAND_PREFIX:clone" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" NEW_SERVICE="$2"
+
+  verify_service_name "$SERVICE"
+  [[ -z "$NEW_SERVICE" ]] && dokku_log_fail "Please specify a name for the new service"
+
+  service_create "$NEW_SERVICE" "${@:3}"
+  service_export "$SERVICE" | service_import "$NEW_SERVICE"
+  dokku_log_info2 "$PLUGIN_SERVICE service $SERVICE cloned to $NEW_SERVICE"
+}
+
+service-clone-cmd "$@"

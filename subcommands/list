@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-list-cmd() {
+  declare desc="list all $PLUGIN_SERVICE services"
+  service_list
+}
+
+service-list-cmd "$@"

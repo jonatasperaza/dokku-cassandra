@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-create-cmd() {
+  declare desc="create a $PLUGIN_SERVICE service"
+  local cmd="$PLUGIN_COMMAND_PREFIX:create" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  local SERVICE="$1"
+
+  [[ -z "$SERVICE" ]] && dokku_log_fail "Please specify a valid name for the service"
+  service_create "$@"
+}
+
+service-create-cmd "$@"

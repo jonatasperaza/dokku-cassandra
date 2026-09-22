@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-enter-cmd() {
+  declare desc="enter or run a command in a running $PLUGIN_SERVICE service container"
+  local cmd="$PLUGIN_COMMAND_PREFIX:enter" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" && shift 1 || true
+
+  verify_service_name "$SERVICE"
+  service_enter "$SERVICE" "$@"
+}
+
+service-enter-cmd "$@"

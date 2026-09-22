@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/config"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/common-functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/property-functions"
+source "$PLUGIN_AVAILABLE_PATH/config/functions"
+if [[ -f "$PLUGIN_AVAILABLE_PATH/docker-options/functions" ]]; then
+  source "$PLUGIN_AVAILABLE_PATH/docker-options/functions"
+fi
+
+service_connect() {
+  declare desc="connect to the service via cqlsh"
+  declare SERVICE="$1"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+  local SERVICE_TTY_OPTS
+  has_tty && SERVICE_TTY_OPTS="-t"
+
+  "$DOCKER_BIN" container exec -i $SERVICE_TTY_OPTS "$SERVICE_NAME" cqlsh
+}
+
+service_create() {
+  declare desc="create a cassandra service"
+  declare SERVICE="$1"
+  is_valid_service_name "$SERVICE" || dokku_log_fail "Please specify a valid name for the service. Valid characters are: [A-Za-z0-9_-]+"
+  [[ -z "$SERVICE" ]] && dokku_log_fail "Please specify a valid name for the service"
+  [[ ! -d "$PLUGIN_DATA_ROOT/$SERVICE" ]] || dokku_log_fail "$PLUGIN_SERVICE service $SERVICE already exists"
+  SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  LINKS_FILE="$SERVICE_ROOT/LINKS"
+
+  service_parse_args "${@:2}"
+
+  if ! service_image_exists "$SERVICE"; then
+    if [[ "$PLUGIN_DISABLE_PULL" == "true" ]]; then
+      dokku_log_warn "${PLUGIN_DISABLE_PULL_VARIABLE} environment variable detected. Not running pull command." 1>&2
+      dokku_log_warn "   docker image pull ${PLUGIN_IMAGE}:${PLUGIN_IMAGE_VERSION}" 1>&2
+      dokku_log_warn "$PLUGIN_SERVICE service creation failed"
+      exit 1
+    fi
+    "$DOCKER_BIN" image pull "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION" || dokku_log_fail "$PLUGIN_SERVICE image $PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION pull failed"
+  fi
+
+  plugn trigger service-action pre-create "$PLUGIN_COMMAND_PREFIX" "$SERVICE"
+  mkdir -p "$SERVICE_ROOT" || dokku_log_fail "Unable to create service directory"
+  mkdir -p "$SERVICE_ROOT/data" || dokku_log_fail "Unable to create service data directory"
+  touch "$LINKS_FILE"
+
+  if [[ -n "$SERVICE_CLUSTER_NAME" ]]; then
+    echo "$SERVICE_CLUSTER_NAME" >"$SERVICE_ROOT/CLUSTER_NAME"
+  fi
+
+  service_commit_config "$SERVICE"
+  write_database_name "$SERVICE"
+  plugn trigger service-action post-create "$PLUGIN_COMMAND_PREFIX" "$SERVICE"
+  service_create_container "$SERVICE"
+  plugn trigger service-action post-create-complete "$PLUGIN_COMMAND_PREFIX" "$SERVICE"
+}
+
+service_create_container() {
+  declare desc="create and start the cassandra container for a service"
+  declare SERVICE="$1"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  local SERVICE_HOST_ROOT="$PLUGIN_DATA_HOST_ROOT/$SERVICE"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+  local CLUSTER_NAME="$(get_database_name "$SERVICE")"
+
+  if [[ -f "$SERVICE_ROOT/CLUSTER_NAME" ]]; then
+    CLUSTER_NAME="$(cat "$SERVICE_ROOT/CLUSTER_NAME")"
+  fi
+
+  if [[ -f "$SERVICE_ROOT/CONFIG_OPTIONS" ]]; then
+    export CONFIG_OPTIONS="$(cat "$SERVICE_ROOT/CONFIG_OPTIONS")"
+  fi
+
+  local network_alias="$(service_dns_hostname "$SERVICE")"
+
+  rm -f "$SERVICE_ROOT/ID"
+  declare -a DOCKER_ARGS
+  DOCKER_ARGS=()
+  DOCKER_ARGS+=("--cidfile=$SERVICE_ROOT/ID")
+  DOCKER_ARGS+=("--env-file=$SERVICE_ROOT/ENV")
+  DOCKER_ARGS+=("--env=CASSANDRA_CLUSTER_NAME=$CLUSTER_NAME")
+  DOCKER_ARGS+=("--env=CASSANDRA_ENDPOINT_SNITCH=SimpleSnitch")
+  DOCKER_ARGS+=("--hostname=$SERVICE_NAME")
+  DOCKER_ARGS+=("--label=dokku.service=$PLUGIN_COMMAND_PREFIX")
+  DOCKER_ARGS+=("--label=dokku=service")
+  DOCKER_ARGS+=("--name=$SERVICE_NAME")
+  DOCKER_ARGS+=("--restart=always")
+  DOCKER_ARGS+=("--volume=$SERVICE_HOST_ROOT/data:/var/lib/cassandra")
+
+  # CONFIG_OPTIONS are passed through as extra JVM flags (JVM_EXTRA_OPTS is
+  # read by the official image's entrypoint) rather than appended to the
+  # container command, since the image's default CMD ("cassandra -f") can't
+  # safely be overridden with arbitrary arguments
+  if [[ -n "$CONFIG_OPTIONS" ]]; then
+    DOCKER_ARGS+=("--env=JVM_EXTRA_OPTS=$CONFIG_OPTIONS")
+  fi
+
+  [[ -f "$SERVICE_ROOT/SERVICE_MEMORY" ]] && SERVICE_MEMORY="$(cat "$SERVICE_ROOT/SERVICE_MEMORY")"
+  if [[ -n "$SERVICE_MEMORY" ]]; then
+    DOCKER_ARGS+=("--memory=${SERVICE_MEMORY}m")
+  fi
+
+  [[ -f "$SERVICE_ROOT/IMAGE" ]] && PLUGIN_IMAGE="$(cat "$SERVICE_ROOT/IMAGE")"
+  [[ -f "$SERVICE_ROOT/IMAGE_VERSION" ]] && PLUGIN_IMAGE_VERSION="$(cat "$SERVICE_ROOT/IMAGE_VERSION")"
+
+  local network="$(fn-plugin-property-get "$PLUGIN_COMMAND_PREFIX" "$SERVICE" "initial-network")"
+  if [[ -n "$network" ]]; then
+    DOCKER_ARGS+=("--network=${network}")
+    DOCKER_ARGS+=("--network-alias=${network_alias}")
+  fi
+
+  suppress_output "$DOCKER_BIN" container create "${DOCKER_ARGS[@]}" "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION"
+
+  if [[ -n "$(fn-plugin-property-get "$PLUGIN_COMMAND_PREFIX" "$SERVICE" "post-create-network")" ]]; then
+    dokku_log_verbose_quiet "Connecting to networks after container create"
+    while read -r line || [[ -n "$line" ]]; do
+      dokku_log_verbose_quiet "- $line"
+      "$DOCKER_BIN" network connect --alias "$network_alias" "$line" "$SERVICE_NAME"
+    done < <(fn-plugin-property-get "$PLUGIN_COMMAND_PREFIX" "$SERVICE" "post-create-network" | tr "," "\n")
+  fi
+  suppress_output "$DOCKER_BIN" container start "$(cat "$SERVICE_ROOT/ID")"
+  service_port_reconcile_status "$SERVICE"
+
+  if [[ -n "$(fn-plugin-property-get "$PLUGIN_COMMAND_PREFIX" "$SERVICE" "post-start-network")" ]]; then
+    dokku_log_verbose_quiet "Connecting to networks after container start"
+    while read -r line || [[ -n "$line" ]]; do
+      dokku_log_verbose_quiet "- $line"
+      "$DOCKER_BIN" network connect --alias "$network_alias" "$line" "$SERVICE_NAME"
+    done < <(fn-plugin-property-get "$PLUGIN_COMMAND_PREFIX" "$SERVICE" "post-start-network" | tr "," "\n")
+  fi
+
+  dokku_log_verbose_quiet "Waiting for container to be ready (this can take a few minutes for cassandra)"
+  if ! service_wait_ready "$SERVICE_NAME"; then
+    dokku_log_info2_quiet "Start of $SERVICE container output"
+    dokku_container_log_verbose_quiet "$SERVICE_NAME"
+    dokku_log_info2_quiet "End of $SERVICE container output"
+    return 1
+  fi
+
+  dokku_log_info2 "$PLUGIN_SERVICE container created: $SERVICE"
+  service_info "$SERVICE"
+}
+
+service_wait_ready() {
+  declare desc="poll a container with cqlsh until it answers or the startup timeout is reached"
+  declare SERVICE_NAME="$1"
+  local i=0
+
+  until "$DOCKER_BIN" container exec "$SERVICE_NAME" cqlsh -e "describe cluster" >/dev/null 2>&1; do
+    i=$((i + 1))
+    if [[ $i -ge $PLUGIN_STARTUP_TIMEOUT ]]; then
+      return 1
+    fi
+    sleep 2
+  done
+  return 0
+}
+
+service_export() {
+  declare desc="stream a tarball of the flushed cassandra data directory to stdout"
+  declare SERVICE="$1"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+
+  [[ -n $SSH_TTY ]] && stty -opost
+  "$DOCKER_BIN" container exec "$SERVICE_NAME" nodetool flush >/dev/null 2>&1 || true
+  "$DOCKER_BIN" container exec "$SERVICE_NAME" tar -cf - -C /var/lib/cassandra data
+  status=$?
+  [[ -n $SSH_TTY ]] && stty opost
+  exit $status
+}
+
+service_import() {
+  declare desc="replace the cassandra data directory from a tarball on stdin"
+  declare SERVICE="$1"
+  local SERVICE_HOST_ROOT="$PLUGIN_DATA_HOST_ROOT/$SERVICE"
+
+  if [[ -t 0 ]]; then
+    dokku_log_fail "No data provided on stdin."
+  fi
+  suppress_output service_container_rm "$SERVICE"
+  rm -rf "${SERVICE_HOST_ROOT:?}/data"
+  mkdir -p "$SERVICE_HOST_ROOT/data"
+  "$DOCKER_BIN" container run --rm -i -v "$SERVICE_HOST_ROOT/data:/target" "$PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION" bash -c "tar -xf - -C /target --strip-components=1 && chown -R cassandra:cassandra /target"
+  suppress_output service_start "$SERVICE"
+}
+
+service_start() {
+  declare desc="start a stopped service"
+  declare SERVICE="$1"
+  declare QUIET="$2"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+  local SERVICE_NAME="$(get_service_name "$SERVICE")"
+  local ID=$("$DOCKER_BIN" container ps -aq --no-trunc --filter "status=running" --filter "name=^/$SERVICE_NAME$") || true
+  if [[ -n $ID ]]; then
+    [[ -z $QUIET ]] && dokku_log_warn "Service is already started"
+    if [[ ! -f "$SERVICE_ROOT/ID" ]] || [[ "$(cat "$SERVICE_ROOT/ID")" != "$ID" ]]; then
+      [[ -z $QUIET ]] && dokku_log_warn "Updating local container ID"
+      echo "$ID" >"$SERVICE_ROOT/ID"
+    fi
+    return 0
+  fi
+
+  dokku_log_info2_quiet "Starting container"
+  local PREVIOUS_ID=$("$DOCKER_BIN" container ps -aq --no-trunc --filter "status=exited" --filter "name=^/$SERVICE_NAME$") || true
+
+  if [[ -n $PREVIOUS_ID ]]; then
+    "$DOCKER_BIN" container start "$PREVIOUS_ID" >/dev/null
+    service_port_reconcile_status "$SERVICE"
+    dokku_log_verbose_quiet "Waiting for container to be ready"
+    service_wait_ready "$SERVICE_NAME" || dokku_log_warn "Container did not report ready within the startup timeout; check '$PLUGIN_COMMAND_PREFIX:logs $SERVICE'"
+    dokku_log_info2 "Container started"
+  elif service_image_exists "$SERVICE"; then
+    service_create_container "$SERVICE"
+  else
+    if ! service_image_exists "$SERVICE"; then
+      [[ -f "$SERVICE_ROOT/IMAGE" ]] && PLUGIN_IMAGE="$(cat "$SERVICE_ROOT/IMAGE")"
+      [[ -f "$SERVICE_ROOT/IMAGE_VERSION" ]] && PLUGIN_IMAGE_VERSION="$(cat "$SERVICE_ROOT/IMAGE_VERSION")"
+      dokku_log_verbose_quiet "Missing image $PLUGIN_IMAGE:$PLUGIN_IMAGE_VERSION for $SERVICE"
+    else
+      dokku_log_verbose_quiet "Neither container nor valid configuration exists for $SERVICE"
+    fi
+  fi
+}
+
+service_url() {
+  declare desc="build the connection url for a service"
+  declare SERVICE="$1"
+  local KEYSPACE="$(get_database_name "$SERVICE")"
+  local SERVICE_DNS_HOSTNAME="$(service_dns_hostname "$SERVICE")"
+  echo "$PLUGIN_SCHEME://$SERVICE_DNS_HOSTNAME:${PLUGIN_DATASTORE_PORTS[0]}/$KEYSPACE"
+}

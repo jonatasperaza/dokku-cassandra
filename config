@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+export CASSANDRA_ROOT=${CASSANDRA_ROOT:="$DOKKU_LIB_ROOT/services/cassandra"}
+export DOKKU_LIB_HOST_ROOT=${DOKKU_LIB_HOST_ROOT:=$DOKKU_LIB_ROOT}
+export CASSANDRA_HOST_ROOT=${CASSANDRA_HOST_ROOT:="$DOKKU_LIB_HOST_ROOT/services/cassandra"}
+
+export PLUGIN_COMMAND_PREFIX="cassandra"
+export PLUGIN_CONFIG_ROOT=${PLUGIN_CONFIG_ROOT:="$DOKKU_LIB_ROOT/config/$PLUGIN_COMMAND_PREFIX"}
+export PLUGIN_DATA_ROOT=$CASSANDRA_ROOT
+export PLUGIN_DATA_HOST_ROOT=$CASSANDRA_HOST_ROOT
+
+# only the CQL native-transport port is tracked for expose/link purposes;
+# intra-node (7000/7001) and JMX (7199) stay internal to the docker network
+export PLUGIN_DATASTORE_PORTS=(9042)
+export PLUGIN_DATASTORE_WAIT_PORT=9042
+export PLUGIN_DEFAULT_ALIAS="CASSANDRA"
+export PLUGIN_DISABLE_PULL=${CASSANDRA_DISABLE_PULL:=}
+export PLUGIN_DISABLE_PULL_VARIABLE="CASSANDRA_DISABLE_PULL"
+export PLUGIN_ALT_ALIAS="DOKKU_CASSANDRA"
+
+export CASSANDRA_IMAGE=${CASSANDRA_IMAGE:="cassandra"}
+export CASSANDRA_IMAGE_VERSION=${CASSANDRA_IMAGE_VERSION:="5.0"}
+export PLUGIN_IMAGE=$CASSANDRA_IMAGE
+export PLUGIN_IMAGE_VERSION=$CASSANDRA_IMAGE_VERSION
+export PLUGIN_SCHEME="cassandra"
+export PLUGIN_SERVICE="Cassandra"
+export PLUGIN_VARIABLE="CASSANDRA"
+export PLUGIN_BASE_PATH="$PLUGIN_PATH"
+export PLUGIN_CONFIG_SUFFIX="config"
+if [[ -n $DOKKU_API_VERSION ]]; then
+  export PLUGIN_BASE_PATH="$PLUGIN_ENABLED_PATH"
+fi
+
+export PLUGIN_BUSYBOX_IMAGE=${PLUGIN_BUSYBOX_IMAGE:=busybox:1.37.0-uclibc}
+export PLUGIN_AMBASSADOR_IMAGE=${PLUGIN_AMBASSADOR_IMAGE:=dokku/ambassador:0.8.2}
+export PLUGIN_S3BACKUP_IMAGE=${PLUGIN_S3BACKUP_IMAGE:=dokku/s3backup:0.18.0}
+
+export CASSANDRA_CONFIG_OPTIONS=${CASSANDRA_CONFIG_OPTIONS:=""}
+
+# how many 2-second polls to wait for a fresh container to answer cqlsh
+# before service_create_container gives up (~6 minutes, cassandra's jvm
+# startup is much slower than redis/postgres)
+export PLUGIN_STARTUP_TIMEOUT=${PLUGIN_STARTUP_TIMEOUT:=180}

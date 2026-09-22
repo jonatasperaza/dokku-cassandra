@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-import-cmd() {
+  declare desc="import a snapshot into the $PLUGIN_SERVICE service data directory"
+  local cmd="$PLUGIN_COMMAND_PREFIX:import" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1"
+
+  verify_service_name "$SERVICE"
+  service_import "$SERVICE"
+}
+
+service-import-cmd "$@"

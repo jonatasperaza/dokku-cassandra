@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-exists-cmd() {
+  declare desc="check if the $PLUGIN_SERVICE service exists"
+  local cmd="$PLUGIN_COMMAND_PREFIX:exists" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1"
+
+  if ! service_exists "$SERVICE"; then
+    dokku_log_fail "$PLUGIN_SERVICE service $SERVICE does not exist"
+  fi
+  dokku_log_info1 "$PLUGIN_SERVICE service $SERVICE exists"
+}
+
+service-exists-cmd "$@"

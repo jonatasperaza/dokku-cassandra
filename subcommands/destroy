@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-destroy-cmd() {
+  declare desc="delete the $PLUGIN_SERVICE service/data/container if there are no links left"
+  local cmd="$PLUGIN_COMMAND_PREFIX:destroy" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" FORCE_FLAG="$2"
+  local SERVICE_ROOT="$PLUGIN_DATA_ROOT/$SERVICE"
+
+  verify_service_name "$SERVICE"
+
+  if [[ -z "$FORCE_FLAG" ]] || [[ "$FORCE_FLAG" != "-f" && "$FORCE_FLAG" != "--force" ]]; then
+    dokku_log_warn "This will permanently delete the service $SERVICE and its data."
+    read -rp "Please confirm the destroy request by typing the service name (${SERVICE}): " confirm
+    if [[ "$confirm" != "$SERVICE" ]]; then
+      dokku_log_warn "Confirmation did not match $SERVICE. Aborted."
+      exit 1
+    fi
+  fi
+
+  local LINKS="$(service_links "$SERVICE")"
+  if [[ -n "$LINKS" ]]; then
+    dokku_log_fail "Cannot delete linked service, unlink apps first: $(echo "$LINKS" | tr '\n' ' ')"
+  fi
+
+  plugn trigger service-action pre-delete "$PLUGIN_COMMAND_PREFIX" "$SERVICE"
+  service_container_rm "$SERVICE"
+  service_port_unexpose "$SERVICE" 2>/dev/null || true
+  rm -rf "$SERVICE_ROOT"
+  plugn trigger service-action post-delete "$PLUGIN_COMMAND_PREFIX" "$SERVICE"
+  dokku_log_info2 "$PLUGIN_SERVICE service $SERVICE deleted"
+}
+
+service-destroy-cmd "$@"

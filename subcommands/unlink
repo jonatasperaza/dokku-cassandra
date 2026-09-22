@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-unlink-cmd() {
+  declare desc="unlink the $PLUGIN_SERVICE service from the app"
+  local cmd="$PLUGIN_COMMAND_PREFIX:unlink" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1" APP="$2"
+
+  verify_service_name "$SERVICE"
+  [[ -z "$APP" ]] && dokku_log_fail "Please specify an app to run the command on"
+  verify_app_name "$APP"
+  service_parse_args "${@:3}"
+  service_unlink "$SERVICE" "$APP"
+  dokku_log_info2 "$PLUGIN_SERVICE service $SERVICE unlinked from $APP"
+}
+
+service-unlink-cmd "$@"

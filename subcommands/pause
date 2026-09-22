@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-pause-cmd() {
+  declare desc="pause a running $PLUGIN_SERVICE service, keeping the container"
+  local cmd="$PLUGIN_COMMAND_PREFIX:pause" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1"
+
+  verify_service_name "$SERVICE"
+  service_pause "$SERVICE"
+  dokku_log_info2 "$PLUGIN_SERVICE container paused: $SERVICE"
+}
+
+service-pause-cmd "$@"

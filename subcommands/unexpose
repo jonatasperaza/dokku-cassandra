@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-unexpose-cmd() {
+  declare desc="unexpose a previously exposed $PLUGIN_SERVICE service"
+  local cmd="$PLUGIN_COMMAND_PREFIX:unexpose" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare SERVICE="$1"
+
+  verify_service_name "$SERVICE"
+  service_port_unexpose "$SERVICE"
+}
+
+service-unexpose-cmd "$@"

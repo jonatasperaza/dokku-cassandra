@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+source "$(dirname "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+service-app-links-cmd() {
+  declare desc="list all $PLUGIN_SERVICE service links for a given app"
+  local cmd="$PLUGIN_COMMAND_PREFIX:app-links" argv=("$@")
+  [[ ${argv[0]} == "$cmd" ]] && shift 1
+  declare APP="$1"
+
+  [[ -z "$APP" ]] && dokku_log_fail "Please specify an app to run the command on"
+  verify_app_name "$APP"
+  service_app_links "$APP"
+}
+
+service-app-links-cmd "$@"
